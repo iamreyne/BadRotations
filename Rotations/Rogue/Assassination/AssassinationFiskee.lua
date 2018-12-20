@@ -1,4 +1,4 @@
-local rotationName = "Fiskee - 8.0.1"
+local rotationName = "Fiskee - 8.1"
 local opener, opn1, opn2, opn3, opn4, opn5, opn6 = false, false, false, false, false, false, false
 local resetButton
 local dotBlacklist = "135824|139057|129359|129448|134503|137458|139185|120651"
@@ -54,6 +54,7 @@ local function createOptions()
         --- GENERAL OPTIONS --- -- Define General Options
         -----------------------
         section = br.ui:createSection(br.ui.window.profile,  "General")
+            br.ui:createDropdownWithout(section, "Poison", {"Deadly","Wound",}, 1, "Poison to apply.")
             br.ui:createDropdown(section, "Auto Stealth", {"|cff00FF00Always", "|cffFF000020 Yards"},  1, "Auto stealth mode.")
             br.ui:createCheckbox(section, "Tricks of the Trade on Focus")
             br.ui:createCheckbox(section, "Auto Target", "|cffFFFFFF Will auto change to a new target, if current target is dead")
@@ -158,6 +159,7 @@ local function runRotation()
     local has                                           = br.player.has
     local healPot                                       = getHealthPot()
     local inCombat                                      = br.player.inCombat
+    local level                                         = br.player.level
     local mode                                          = br.player.mode
     local moving                                        = isMoving("player") ~= false or br.player.moving
     local php                                           = br.player.health
@@ -167,7 +169,7 @@ local function runRotation()
     local racial                                        = br.player.getRacial()
     local spell                                         = br.player.spell
     local stealth                                       = br.player.buff.stealth.exists()
-    local stealthedRogue                                = br.player.buff.stealth.exists() or br.player.buff.vanish.exists() or br.player.buff.subterfuge.exists()
+    local stealthedRogue                                = br.player.buff.stealth.exists() or br.player.buff.vanish.exists() or br.player.buff.subterfuge.remain() > 0.2 or br.player.cast.last.vanish(1)
     local stealthedAll                                  = br.player.buff.stealth.exists() or br.player.buff.vanish.exists() or br.player.buff.subterfuge.exists() or br.player.buff.shadowmeld.exists()
     local talent                                        = br.player.talent
     local thp                                           = getHP("target")
@@ -283,7 +285,7 @@ local function runRotation()
             local thisUnit = enemyTable30[i]
             if thisUnit.distance <= 10 then
                 tinsert(enemyTable10, thisUnit)
-                if deadlyPoison10 and not debuff.deadlyPoison.exists(thisUnit.unit) then deadlyPoison10 = false end
+                if deadlyPoison10 and (getOptionValue("Poison") == 1 and not debuff.deadlyPoison.exists(thisUnit.unit)) or (getOptionValue("Poison") == 2 and not debuff.woundPoison.exists(thisUnit.unit)) then deadlyPoison10 = false end
                 if debuff.garrote.remain(thisUnit.unit) > 0.5 then garroteCount = garroteCount + 1 end
                 if thisUnit.distance <= 5 then
                     tinsert(enemyTable5, thisUnit)
@@ -309,8 +311,8 @@ local function runRotation()
     --Variables
     local dSEnabled, sSActive, dDRank, sRogue
     if talent.deeperStratagem then dSEnabled = 1 else dSEnabled = 0 end
-    if trait.shroudedSuffocation.active() then sSActive = 1 else sSActive = 0 end
-    if trait.doubleDose.rank() > 2 then dDRank = 1 else dDRank = 0 end
+    if trait.shroudedSuffocation.active then sSActive = 1 else sSActive = 0 end
+    if trait.doubleDose.rank > 2 then dDRank = 1 else dDRank = 0 end
     if stealthedRogue == true then sRogue = 1 else sRogue = 0 end
     local enemies10 = #enemyTable10
 
@@ -331,10 +333,13 @@ local function runRotation()
         end
         if not inCombat then
             -- actions.precombat+=/apply_poison
-            if not moving and buff.deadlyPoison.remain() < 300 and not cast.last.deadlyPoison() then
+            if not moving and getOptionValue("Poison") == 1 and buff.deadlyPoison.remain() < 300 and not cast.last.deadlyPoison(1) then
                 if cast.deadlyPoison("player") then return true end
             end
-            if not moving and buff.cripplingPoison.remain() < 300 and not cast.last.cripplingPoison() then
+            if not moving and getOptionValue("Poison") == 2 and buff.woundPoison.remain() < 300 and not cast.last.woundPoison(1) then
+                if cast.woundPoison("player") then return true end
+            end
+            if not moving and buff.cripplingPoison.remain() < 300 and not cast.last.cripplingPoison(1) then
                 if cast.cripplingPoison("player") then return true end
             end
             -- actions.precombat+=/stealth
@@ -563,10 +568,10 @@ local function runRotation()
         if useCDs() and ttd("target") > getOptionValue("CDs TTD Limit") then
             -- # Vendetta outside stealth with Rupture up. With Subterfuge talent and Shrouded Suffocation power always use with buffed Garrote. With Nightstalker and Exsanguinate use up to 5s (3s with DS) before Vanish combo.
             -- actions.cds+=/vendetta,if=!stealthed.rogue&dot.rupture.ticking&(!talent.subterfuge.enabled|!azerite.shrouded_suffocation.enabled|dot.garrote.pmultiplier>1)&(!talent.nightstalker.enabled|!talent.exsanguinate.enabled|cooldown.exsanguinate.remains<5-2*talent.deeper_stratagem.enabled)
-            if isChecked("Vendetta") and not stealthedRogue and debuff.rupture.exists("target") and (not talent.subterfuge or trait.shroudedSuffocation.active() or debuff.garrote.applied("target") > 1 or not isChecked("Vanish")) and (not talent.nightstalker or not talent.exsanguinate or (talent.exsanguinate and cd.exsanguinate.remain() < (5-2*dSEnabled))) then
+            if isChecked("Vendetta") and not stealthedRogue and debuff.rupture.exists("target") and (not talent.subterfuge or trait.shroudedSuffocation.active or debuff.garrote.applied("target") > 1 or not isChecked("Vanish")) and (not talent.nightstalker or not talent.exsanguinate or (talent.exsanguinate and cd.exsanguinate.remain() < (5-2*dSEnabled))) then
                 if cast.vendetta("target") then return true end
             end
-            if isChecked("Vanish") and not stealthedRogue and getDistance("target") < 5 then
+            if isChecked("Vanish") and not stealthedRogue and getDistance("target") < 5 and gcd < 0.2 then
                 -- # Extra Subterfuge Vanish condition: Use when Garrote dropped on Single Target
                 -- actions.cds+=/vanish,if=talent.subterfuge.enabled&!dot.garrote.ticking&variable.single_target
                 if talent.subterfuge and not debuff.garrote.exists("target") and enemies10 == 1 then
@@ -574,7 +579,7 @@ local function runRotation()
                 end
                 -- # Vanish with Exsg + (Nightstalker, or Subterfuge only on 1T): Maximum CP and Exsg ready for next GCD
                 -- actions.cds+=/vanish,if=talent.exsanguinate.enabled&(talent.nightstalker.enabled|talent.subterfuge.enabled&variable.single_target)&combo_points>=cp_max_spend&cooldown.exsanguinate.remains<1&(!talent.subterfuge.enabled|!azerite.shrouded_suffocation.enabled|dot.garrote.pmultiplier<=1)
-                if talent.exsanguinate and (talent.nightstalker or (talent.subterfuge and enemies10 == 1)) and combo >= comboMax and cd.exsanguinate.remain() < 1 and (not talent.subterfuge or not trait.shroudedSuffocation.active() or debuff.garrote.applied("target") <= 1) then
+                if talent.exsanguinate and (talent.nightstalker or (talent.subterfuge and enemies10 == 1)) and combo >= comboMax and cd.exsanguinate.remain() < 1 and (not talent.subterfuge or not trait.shroudedSuffocation.active or debuff.garrote.applied("target") <= 1) then
                     if cast.vanish("player") then return true end
                 end
                 -- # Vanish with Nightstalker + No Exsg: Maximum CP and Vendetta up
@@ -612,11 +617,11 @@ local function runRotation()
             if cast.envenom("target") then return true end
         end
         -- actions.direct+=/variable,name=use_filler,value=combo_points.deficit>1|energy.deficit<=25+variable.energy_regen_combined|!variable.single_target
-        local useFiller = comboDeficit > 1 or energyDeficit <= (25 + energyRegenCombined) or enemies10 > 1 and not buff.stealth.exists() and not buff.vanish.exists()
-        -- # Poisoned Knife at 29+ stacks of Sharpened Blades.
-        -- actions.direct+=/poisoned_knife,if=variable.use_filler&buff.sharpened_blades.stack>=29
-        if useFiller and buff.sharpenedBlades.stack() >= 29 then
-            if cast.poisonedKnife("target") then return true end
+        local useFiller = comboDeficit > 1 or energyDeficit <= (25 + energyRegenCombined) or enemies10 > 1 and not stealthedRogue
+        -- # With Echoing Blades, Fan of Knives at 2+ targets.
+        -- actions.direct+=/fan_of_knives,if=variable.use_filler&azerite.echoing_blades.enabled&spell_targets.fan_of_knives>=2
+        if useFiller and enemies10 >= 2 and trait.echoingBlades.active then
+            if cast.fanOfKnives("player") then return true end
         end
         -- actions.direct+=/fan_of_knives,if=variable.use_filler&(buff.hidden_blades.stack>=19|spell_targets.fan_of_knives>=4+(azerite.double_dose.rank>2)+stealthed.rogue)
         if useFiller and (buff.hiddenBlades.stack() >= 19 or enemies10 >= (4 + dDRank + sRogue)) then
@@ -628,18 +633,18 @@ local function runRotation()
             if cast.fanOfKnives("player") then return true end
         end
         -- actions.direct+=/blindside,if=variable.use_filler&(buff.blindside.up|!talent.venom_rush.enabled&!azerite.double_dose.enabled)
-        if useFiller and thp < 30 and (buff.blindside.exists() or (not talent.venomRush and not trait.doubleDose.active())) then
+        if useFiller and thp < 30 and (buff.blindside.exists() or (not talent.venomRush and not trait.doubleDose.active)) then
             if cast.blindside("target") then return true end
         end
         -- # Tab-Mutilate to apply Deadly Poison at 2 targets
         -- actions.direct+=/mutilate,target_if=!dot.deadly_poison_dot.ticking,if=variable.use_filler&spell_targets.fan_of_knives=2
         if useFiller and enemies10 == 2 then
-            if not debuff.deadlyPoison.exists("target") then
+            if (getOptionValue("Poison") == 1 and not debuff.deadlyPoison.exists("target")) or (getOptionValue("Poison") == 2 and not debuff.woundPoison.exists("target")) then
                 if cast.mutilate("target") then return true end
             end
             for i = 1, #enemyTable5 do
                 local thisUnit = enemyTable5[i].unit
-                if not debuff.deadlyPoison.exists(thisUnit) then
+                if (getOptionValue("Poison") == 1 and not debuff.deadlyPoison.exists(thisUnit)) or (getOptionValue("Poison") == 2 and not debuff.woundPoison.exists(thisUnit)) then
                     if cast.mutilate(thisUnit) then return true end
                 end
             end
@@ -647,6 +652,14 @@ local function runRotation()
         -- actions.direct+=/mutilate,if=variable.use_filler
         if useFiller then
             if cast.mutilate("target") then return true end
+        end
+        --evis low level
+        if level < 36 and combo >= 4 then
+            if cast.eviscerate("target") then return true end
+        end
+        -- Sinister Strike
+        if level < 40 then
+            if cast.sinisterStrike("target") then return true end
         end
     end
 
@@ -728,12 +741,12 @@ local function runRotation()
         end
         -- # Subterfuge + Shrouded Suffocation: Apply early Rupture that will be refreshed for pandemic.
         -- actions.stealthed+=/rupture,if=talent.subterfuge.enabled&azerite.shrouded_suffocation.enabled&!dot.rupture.ticking
-        if talent.subterfuge and trait.shroudedSuffocation.active() and not debuff.rupture.exists("target") then
+        if talent.subterfuge and trait.shroudedSuffocation.active and not debuff.rupture.exists("target") then
             if cast.rupture("target") then return true end
         end
         -- # Subterfuge w/ Shrouded Suffocation: Reapply for bonus CP and extended snapshot duration
         -- actions.stealthed+=/garrote,cycle_targets=1,if=talent.subterfuge.enabled&azerite.shrouded_suffocation.enabled&target.time_to_die>remains&combo_points.deficit>1
-        if talent.subterfuge and trait.shroudedSuffocation.active() then
+        if talent.subterfuge and trait.shroudedSuffocation.active then
             for i = 1, #enemyTable5 do
                 local thisUnit = enemyTable5[i].unit
                 if enemyTable5[i].ttd > debuff.garrote.remain(thisUnit) and comboDeficit > 1 then
@@ -742,7 +755,7 @@ local function runRotation()
             end
         end
         -- actions.stealthed+=/garrote,if=talent.subterfuge.enabled&talent.exsanguinate.enabled&cooldown.exsanguinate.remains<1&prev_gcd.1.rupture&dot.rupture.remains>5+4*cp_max_spend
-        if mode.exsang == 1 and talent.subterfuge and talent.exsanguinate and cd.exsanguinate.remain() < 1 and cast.last.rupture() and debuff.rupture.remain("target") > 17.5 then
+        if mode.exsang == 1 and talent.subterfuge and talent.exsanguinate and cd.exsanguinate.remain() < 1 and cast.last.rupture(1) and debuff.rupture.remain("target") > 17.5 then
             if cast.pool.garrote() then return true end
             if cast.garrote("target") then return true end
         end
@@ -766,7 +779,8 @@ local function runRotation()
 -----------------------------
 --- In Combat - Rotations --- 
 -----------------------------
-        if (inCombat or (not isChecked("Disable Auto Combat") and (cast.last.vanish() or (validTarget and getDistance("target") < 5)))) and opener == true then
+        if (inCombat or (not isChecked("Disable Auto Combat") and (cast.last.vanish(1) or (validTarget and getDistance("target") < 5)))) and opener == true then
+            if cast.last.vanish(1) then StopAttack() end
             if actionList_Defensive() then return true end
             if actionList_Interrupts() then return true end
             -- # Restealth if possible (no vulnerable enemies in combat)

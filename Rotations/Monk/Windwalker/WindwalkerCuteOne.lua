@@ -380,8 +380,8 @@ local function runRotation()
                 end
             end
         -- Fixate - Storm, Earth, and Fire
-            if getOptionValue("SEF Behavior") == 1 and not talent.serenity and not cast.current.fistsOfFury() then
-                if cast.stormEarthAndFireFixate() then return true end
+            if cast.able.stormEarthAndFireFixate("target") and getOptionValue("SEF Behavior") == 1 and not talent.serenity and not cast.current.fistsOfFury() then
+                if cast.stormEarthAndFireFixate("target") then return true end
             end
         end -- End Action List - Extras
     -- Action List - Defensive
@@ -629,12 +629,12 @@ local function runRotation()
         end -- End Action List - Opener
     -- Action List - Single Target
         function actionList_SingleTarget()
-        -- Cancel Rushing Jade Wind
-            -- cancel_buff,name=rushing_jade_wind,if=active_enemies=1&(!talent.serenity.enabled|cooldown.serenity.remains>3)
-            if buff.rushingJadeWind.exists() and ((mode.rotation == 1 and #enemies.yards8 == 1) or (mode.rotation == 3)) and (not talent.serenity or cd.serenity.remain() > 3) then
-                --if buff.rushingJadeWind.cancel() then return true end
-                CastSpellByID(spell.rushingJadeWind)
-            end
+        -- -- Cancel Rushing Jade Wind
+        --     -- cancel_buff,name=rushing_jade_wind,if=active_enemies=1&(!talent.serenity.enabled|cooldown.serenity.remains>3)
+        --     if buff.rushingJadeWind.exists() and ((mode.rotation == 1 and #enemies.yards8 == 1) or (mode.rotation == 3)) and (not talent.serenity or cd.serenity.remain() > 3) then
+        --         --if buff.rushingJadeWind.cancel() then return true end
+        --         CastSpellByID(spell.rushingJadeWind)
+        --     end
         -- Whirling Dragon Punch
             -- whirling_dragon_punch
             if cast.able.whirlingDragonPunch() and isChecked("Whirling Dragon Punch") and talent.whirlingDragonPunch and cd.fistsOfFury.exists() and cd.risingSunKick.exists() and #enemies.yards8 >= getValue("Whirling Dragon Punch Targets") then
@@ -656,15 +656,15 @@ local function runRotation()
                 if cast.risingSunKick(lowestMark) then return end
             end
         -- Rushing Jade Wind
-            -- rushing_jade_wind,if=buff.rushing_jade_wind.down&energy.time_to_max>1&active_enemies>1
-            if cast.able.rushingJadeWind() and not buff.rushingJadeWind.exists() and ttm > 1
+            -- rushing_jade_wind,if=buff.rushing_jade_wind.down&active_enemies>1
+            if cast.able.rushingJadeWind() and not buff.rushingJadeWind.exists()
                 and ((mode.rotation == 1 and #enemies.yards8 > 1) or (mode.rotation == 2 and #enemies.yards8 > 0))
             then
                 if cast.rushingJadeWind() then return end
             end
         -- Fist of the White Tiger
-            -- fist_of_the_white_tiger,if=chi<=2&(buff.rushing_jade_wind.down|energy>46)
-            if cast.able.fistOfTheWhiteTiger() and chi <= 2 and (not buff.rushingJadeWind.exists() or energy > 46) then
+            -- fist_of_the_white_tiger,if=chi<=2
+            if cast.able.fistOfTheWhiteTiger() and chi <= 2 then
                 if cast.fistOfTheWhiteTiger() then return end
             end
         -- Energizing Elixir
@@ -694,8 +694,8 @@ local function runRotation()
                 if cast.chiBurst(nil,"rect",1,12) then return true end
             end
         -- Tiger Palm
-            -- tiger_palm,target_if=min:debuff.mark_of_the_crane.remains,if=!prev_gcd.1.tiger_palm&chi.max-chi>=2&(buff.rushing_jade_wind.down|energy>56)
-            if cast.able.tigerPalm(lowestMark) and not cast.last.tigerPalm() and chiMax - chi >= 2 and (not buff.rushingJadeWind.exists() or energy > 56) then
+            -- tiger_palm,target_if=min:debuff.mark_of_the_crane.remains,if=!prev_gcd.1.tiger_palm&chi.max-chi>=2
+            if cast.able.tigerPalm(lowestMark) and not cast.last.tigerPalm() and chiMax - chi >= 2 then
                 if cast.tigerPalm(lowestMark) then return true end
             end
         -- Flying Serpent Kick
@@ -714,6 +714,11 @@ local function runRotation()
         end -- End Action List - Single Target
     -- Action List - AoE
         function actionList_AoE()
+        -- Rising Sun Kick
+            -- rising_sun_kick,target_if=min:debuff.mark_of_the_crane.remains,if=(talent.whirling_dragon_punch.enabled&cooldown.whirling_dragon_punch.remains<5)&cooldown.fists_of_fury.remains>3
+            if chi >= 2 and  cast.able.risingSunKick(lowestMark) and (talent.whirlingDragonPunch and cd.whirlingDragonPunch.remain() < 5) and cd.fistsOfFury.remain() > 3 then
+                if cast.risingSunKick(lowestMark) then return true end
+            end
         -- Whirling Dragon Punch
             -- whirling_dragon_punch
             if cast.able.whirlingDragonPunch() and isChecked("Whirling Dragon Punch") and talent.whirlingDragonPunch and cd.fistsOfFury.exists() and cd.risingSunKick.exists() and #enemies.yards8 >= getValue("Whirling Dragon Punch Targets") then
@@ -722,7 +727,7 @@ local function runRotation()
         -- Energizing Elixir
             -- energizing_elixir,if=!prev_gcd.1.tiger_palm&chi<=1&energy<50
             if cast.able.energizingElixir() and (getOptionValue("Energizing Elixir") == 1 or (getOptionValue("Energizing Elixir") == 2 and useCDs()))
-                and not cast.last.tigerPalm() and chi <= 1 and energy < 50 and getDistance("target") < 5
+                and not cast.last.tigerPalm() and chi <= 1 and energy < 50 and getDistance("target") < 8
             then
                 if cast.energizingElixir() then return true end
             end
@@ -732,14 +737,9 @@ local function runRotation()
                 if cast.fistsOfFury(nil,"cone",1,45) then return true end
             end
         -- Rushing Jade Wind
-            -- rushing_jade_wind,if=buff.rushing_jade_wind.down&energy.time_to_max>1
-            if cast.able.rushingJadeWind() and not buff.rushingJadeWind.exists() and ttm > 1 then
+            -- rushing_jade_wind,if=buff.rushing_jade_wind.down
+            if cast.able.rushingJadeWind() and not buff.rushingJadeWind.exists() then
                 if cast.rushingJadeWind() then return end
-            end
-        -- Rising Sun Kick
-            -- rising_sun_kick,target_if=min:debuff.mark_of_the_crane.remains,if=(talent.whirling_dragon_punch.enabled&cooldown.whirling_dragon_punch.remains<5)&cooldown.fists_of_fury.remains>3
-            if chi >= 2 and  cast.able.risingSunKick(lowestMark) and (talent.whirlingDragonPunch and cd.whirlingDragonPunch.remain() < 5) and cd.fistsOfFury.remain() > 3 then
-                if cast.risingSunKick(lowestMark) then return true end
             end
         -- Spinning Crane Kick
             -- spinning_crane_kick,if=!prev_gcd.1.spinning_crane_kick&(((chi>3|cooldown.fists_of_fury.remains>6)&(chi>=5|cooldown.fists_of_fury.remains>2))|energy.time_to_max<=3)
@@ -756,16 +756,13 @@ local function runRotation()
                 if cast.chiBurst(nil,"rect",1,12) then return true end
             end
         -- Fist of the White Tiger
-            -- fist_of_the_white_tiger,if=chi.max-chi>=3&(energy>46|buff.rushing_jade_wind.down)
-            if cast.able.fistOfTheWhiteTiger() and chiMax - chi >= 3 and (energy > 46 or not buff.rushingJadeWind.exists()) then
+            -- fist_of_the_white_tiger,if=chi.max-chi>=3
+            if cast.able.fistOfTheWhiteTiger() and chiMax - chi >= 3 then
                 if cast.fistOfTheWhiteTiger() then return end
             end
         -- Tiger Palm
-            -- tiger_palm,target_if=min:debuff.mark_of_the_crane.remains,if=chi.max-chi>=2&(energy>56|buff.rushing_jade_wind.down)&(!talent.hit_combo.enabled|!prev_gcd.1.tiger_palm)
-            if cast.able.tigerPalm(lowestMark) and chiMax - chi >= 2 
-                and (energy > 56 or not buff.rushingJadeWind.exists()) 
-                and (not talent.hitCombo or not cast.last.tigerPalm()) 
-            then
+            -- tiger_palm,target_if=min:debuff.mark_of_the_crane.remains,if=chi.max-chi>=2&(!talent.hit_combo.enabled|!prev_gcd.1.tiger_palm)
+            if cast.able.tigerPalm(lowestMark) and chiMax - chi >= 2 and (not talent.hitCombo or not cast.last.tigerPalm()) then
                 if cast.tigerPalm(lowestMark) then return end
             end
         -- Chi Wave
@@ -798,8 +795,8 @@ local function runRotation()
                 if cast.risingSunKick(lowestMark) then return true end
             end
         -- Fists of Fury
-            -- fists_of_fury,if=(buff.bloodlust.up&prev_gcd.1.rising_sun_kick&!azerite.swift_roundhouse.enabled)|buff.serenity.remains<1|(active_enemies>1&active_enemies<5)
-            if chi >= 3 and  cast.able.fistsOfFury() and ((hasBloodLust() and cast.last.risingSunKick() and not traits.swiftRoundhouse.active()) or buff.serenity.remain() < 1
+            -- fists_of_fury,if=(buff.bloodlust.up&prev_gcd.1.rising_sun_kick)|buff.serenity.remains<1|(active_enemies>1&active_enemies<5)
+            if chi >= 3 and  cast.able.fistsOfFury() and ((hasBloodLust() and cast.last.risingSunKick()) or buff.serenity.remain() < 1
                 or (#enemies.yards8 > 1 and #enemies.yards8 < 5)) and mode.fof == 1
             then
                 if cast.fistsOfFury(nil,"cone",1,45) then return end
@@ -903,18 +900,9 @@ local function runRotation()
     --- APL Mode: SimulationCraft ---
     ---------------------------------
                 if getOptionValue("APL Mode") == 1 then -- --[[and cd.global.remain() <= getLatency()]] and GetTime() >= SEFTimer + getOptionValue("SEF Timer") then
-        -- Rushing Jade Wind
-                    -- rushing_jade_wind,if=talent.serenity.enabled&cooldown.serenity.remains<3&energy.time_to_max>1&buff.rushing_jade_wind.down
-                    if cast.able.rushingJadeWind() and talent.serenity and cd.serenity.remain() < 3 and ttm > 1 and not buff.rushingJadeWind.exists() then
-                        if cast.rushingJadeWind() then return end
-                    end
         -- Touch of Karma
-                    -- touch_of_karma,interval=90,pct_health=0.5,if=!talent.Good_Karma.enabled,interval=90,pct_health=0.5
-                    if isChecked("Touch of Karma") and useCDs() and cast.able.touchOfKarma() and php >= 50 and not talent.goodKarma then
-                        if cast.touchOfKarma() then return true end
-                    end
-                    -- touch_of_karma,interval=90,pct_health=1,if=talent.Good_Karma.enabled,interval=90,pct_health=1
-                    if isChecked("Touch of Karma") and useCDs() and cast.able.touchOfKarma() and php >= 100 and talent.goodKarma then
+                    -- touch_of_karma,interval=90,pct_health=0.5
+                    if isChecked("Touch of Karma") and useCDs() and cast.able.touchOfKarma() and php >= 50 then
                         if cast.touchOfKarma() then return true end
                     end
         -- Potion

@@ -56,6 +56,8 @@ local function createOptions()
             br.ui:createSpinner(section, "DPS Testing",  5,  5,  60,  5,  "|cffFFFFFFSet to desired time for test in minuts. Min: 5 / Max: 60 / Interval: 5")
         -- Pre-Pull Timer
             br.ui:createSpinner(section, "Pre-Pull Timer",  5,  1,  10,  1,  "|cffFFFFFFSet to desired time to start Pre-Pull (DBM Required). Min: 1 / Max: 10 / Interval: 1")
+        -- Auto Engage
+            br.ui:createCheckbox(section, "Auto Engage")
         -- Eye Beam Targets
             br.ui:createDropdownWithout(section,"Eye Beam Usage",{"|cff00FF00Per APL","|cffFFFF00AoE Only","|cffFF0000Never"}, 1, "|cffFFFFFFWhen to use Eye Beam.")
             br.ui:createSpinnerWithout(section, "Units To AoE", 3, 1, 10, 1, "|cffFFBB00Number of Targets to use AoE spells on.")
@@ -383,8 +385,10 @@ local function runRotation()
                             -- if cast.metamorphosis("best",false,1,8) then return end
                             if cast.metamorphosis("player") then return end
                         end
-                        -- metamorphosis,if=talent.demonic.enabled&buff.metamorphosis.up
-                        if cast.able.metamorphosis() and talent.demonic and buff.metamorphosis.exists() then
+                        -- metamorphosis,if=talent.demonic.enabled&buff.metamorphosis.up&(!azerite.chaotic_transformation.enabled|!variable.blade_dance|!cooldown.blade_dance.ready)
+                        if cast.able.metamorphosis() and talent.demonic and buff.metamorphosis.exists() 
+                            and (not traits.chaoticTransformation.active or not bladeDanceVar or cd.bladeDance.remain() > 0) 
+                        then
                             if cast.metamorphosis("player") then return end
                         end
                     end
@@ -473,7 +477,7 @@ local function runRotation()
         -- Blade Dance
             -- blade_dance,if=variable.blade_dance&!cooldown.metamorphosis.ready&(cooldown.eye_beam.remains>(5-azerite.revolving_blades.rank*3)|(raid_event.adds.in>cooldown&raid_event.adds.in<25))
             if cast.able.bladeDance() and #enemies.yards8 > 0 and bladeDanceVar and (cd.metamorphosis.remain() > 0 or not useCDs() or not isChecked("Metamorphosis"))
-                and (cd.eyeBeam.remain() > (5 - traits.revolvingBlades.rank() * 3))
+                and (cd.eyeBeam.remain() > (5 - traits.revolvingBlades.rank * 3))
                 --     or ((mode.rotation == 1 and (getOptionValue("Eye Beam Usage") == 3
                 --         or (getOptionValue("Eye Beam Usage") == 2 and enemies.yards8r < getOptionValue("Units To AoE"))
                 --         or (getOptionValue("Eye Beam Usage") == 1 and enemies.yards8r == 0)))
@@ -506,16 +510,6 @@ local function runRotation()
             -- fel_rush,if=talent.demon_blades.enabled&!cooldown.eye_beam.ready&(charges=2|(raid_event.movement.in>10&raid_event.adds.in>10))
             if cast.able.felRush() and getFacing("player","target",10) and charges.felRush.count() > getOptionValue("Hold Fel Rush Charge")
                 and talent.demonBlades and cd.eyeBeam.remain() ~= 0 and charges.felRush.count() == 2
-            then
-                if mode.mover == 1 and getDistance("target") < 8 then
-                    cancelRushAnimation()
-                elseif not isChecked("Fel Rush Only In Melee") and (mode.mover == 2 or (getDistance("target") >= 8 and mode.mover ~= 3)) then
-                    if cast.felRush() then return end
-                end
-            end
-            -- fel_rush,if=!talent.demon_blades.enabled&!cooldown.eye_beam.ready&azerite.unbound_chaos.rank>0
-            if cast.able.felRush() and getFacing("player","target",10) and charges.felRush.count() > getOptionValue("Hold Fel Rush Charge")
-                and not talent.demonBlades and cd.eyeBeam.remain() > 0 and traits.unboundChaos.rank() > 0
             then
                 if mode.mover == 1 and getDistance("target") < 8 then
                     cancelRushAnimation()
@@ -605,17 +599,6 @@ local function runRotation()
             -- blade_dance,if=variable.blade_dance
             if cast.able.bladeDance() and #enemies.yards8 > 0 and not buff.metamorphosis.exists() and bladeDanceVar then
                 if cast.bladeDance("player","aoe",1,8) then return end
-            end
-        -- Fel Rush
-            -- /fel_rush,if=!talent.momentum.enabled&!talent.demon_blades.enabled&azerite.unbound_chaos.enabled
-            if cast.able.felRush() and getFacing("player","target",10) and charges.felRush.count() > getOptionValue("Hold Fel Rush Charge")
-                and not talent.momentum and not talent.demonBlades and traits.unboundChaos.active()
-            then
-                if mode.mover == 1 and getDistance("target") < 8 then
-                    cancelRushAnimation()
-                elseif not isChecked("Fel Rush Only In Melee") and (mode.mover == 2 or (getDistance("target") >= 8 and mode.mover ~= 3)) then
-                    if cast.felRush() then return end
-                end
             end
         -- Felblade
             -- felblade,if=fury.deficit>=40
@@ -730,11 +713,11 @@ local function runRotation()
                 if isValidUnit("target") then
                     if GetUnitReaction("target","player") < 4 then
             -- Throw Glaive
-                        if isChecked("Throw Glaive") and cast.able.throwGlaive("target") and #enemies.get(10,"target",true) == 1 then
+                        if isChecked("Throw Glaive") and cast.able.throwGlaive("target") and #enemies.get(10,"target",true) == 1 and solo and isChecked("Auto Engage") then
                             if cast.throwGlaive("target","aoe") then return end
                         end
             -- Torment
-                        if cast.able.torment("target") and solo then
+                        if cast.able.torment("target") and solo and isChecked("Auto Engage") then
                             if cast.torment("target") then return end
                         end
                     end
