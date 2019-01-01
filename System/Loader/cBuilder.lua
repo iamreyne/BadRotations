@@ -32,9 +32,9 @@ function br.loader.loadProfiles()
     for _, file in pairs(profiles(folderClass, folderSpec)) do
         local profile = ReadFile(rotationsDirectory()..folderClass.."\\"..folderSpec.."\\"..file)
         local start = string.find(profile,"local id = ",1,true) or 0
-        profileID = tonumber(string.sub(profile,start+10,start+13)) or 0
+        local profileID = tonumber(string.sub(profile,start+10,start+13)) or 0
         if profileID == specID then
-            local loadProfile, error = loadstring(profile,file)
+            local loadProfile = loadstring(profile,file)
             if loadProfile == nil then
                 Print("|cffff0000Failed to Load - |r"..tostring(file).."|cffff0000, contact dev.");
             else
@@ -48,6 +48,7 @@ function br.loader:new(spec,specName)
     local loadStart = debugprofilestop()
     local self = cCharacter:new(tostring(select(1,UnitClass("player"))))
     local player = "player" -- if someone forgets ""
+    local brLoaded = brLoaded
 
     if not brLoaded then
         br.loader.loadProfiles()
@@ -57,7 +58,7 @@ function br.loader:new(spec,specName)
     self.profile = specName
 
     -- Mandatory !
-    self.rotation = br.rotations[spec][br.selectedProfile]
+    self.rotation = br.rotations[spec][br.selectedProfile]    
 
     -- Spells From Spell Table
     local function getSpellsForSpec(spec)
@@ -65,6 +66,8 @@ function br.loader:new(spec,specName)
         local specSpells = br.lists.spells[playerClass][spec]
         local sharedClassSpells = br.lists.spells[playerClass]["Shared"]
         local sharedGlobalSpells = br.lists.spells["Shared"]["Shared"]
+
+        -- Get the new spells
         local function getSpells(spellTable)
             -- Look through spell type subtables
             for spellType, spellTypeTable in pairs(spellTable) do
@@ -100,17 +103,19 @@ function br.loader:new(spec,specName)
             self.spell["racial"] = racialID
         end
     end
+    
     -- Update Talent Info
     local function getTalentInfo()
+        local talentFound
         br.activeSpecGroup = GetActiveSpecGroup()
         if self.talent == nil then self.talent = {} end
-        for r = 1, 7 do --search each talent row
-            for c = 1, 3 do -- search each talent column
-            -- Cache Talent IDs for talent checks
-                local _,_,_,selected,_,talentID = GetTalentInfo(r,c,br.activeSpecGroup)
-                -- Compare Row/Column Spell Id to Talent Id List for matches
-                for k,v in pairs(self.spell.talents) do
+        for k,v in pairs(self.spell.talents) do
+            talentFound = false
+            for r = 1, 7 do --search each talent row
+                for c = 1, 3 do -- search each talent column
+                    local _,_,_,selected,_,talentID = GetTalentInfo(r,c,br.activeSpecGroup)
                     if v == talentID then
+                        talentFound = true
                         -- Add All Matches to Talent List for Boolean Checks
                         self.talent[k] = selected
                         -- Add All Active Ability Matches to Ability/Spell List for Use Checks
@@ -118,11 +123,19 @@ function br.loader:new(spec,specName)
                             self.spell['abilities'][k] = v
                             self.spell[k] = v
                         end
+                        break;
                     end
                 end
+                -- If we found the talent, then stop looking for it.
+                if talentFound then break end
+            end
+            -- No matching talent for listed talent id, report to
+            if not talentFound then
+                Print("|cffff0000No talent found for: |r"..k.." ("..v..") |cffff0000in the talent spell list, please notify profile developer.")
             end
         end
     end
+
     --Update Azerite Traits
     local function getAzeriteTraitInfo()
         local azeriteItemLocation = C_AzeriteItem.FindActiveAzeriteItem()
@@ -280,6 +293,11 @@ function br.loader:new(spec,specName)
                     if thisUnit == nil then thisUnit = 'player' end
                     if sourceUnit == nil then sourceUnit = 'player' end
                     return math.abs(getBuffRemain(thisUnit,v,sourceUnit))
+                    end
+                buff.remains = function(thisUnit,sourceUnit)
+                    if thisUnit == nil then thisUnit = 'player' end
+                    if sourceUnit == nil then sourceUnit = 'player' end
+                    return math.abs(getBuffRemain(thisUnit,v,sourceUnit))
                 end
                 buff.stack = function(thisUnit,sourceUnit)
                     if thisUnit == nil then thisUnit = 'player' end
@@ -352,6 +370,11 @@ function br.loader:new(spec,specName)
                 return getDebuffDuration(thisUnit,v,sourceUnit) or 0
             end
             debuff.remain = function(thisUnit,sourceUnit)
+                if thisUnit == nil then thisUnit = 'target' end
+                if sourceUnit == nil then sourceUnit = 'player' end
+                return math.abs(getDebuffRemain(thisUnit,v,sourceUnit))
+            end
+            debuff.remains = function(thisUnit,sourceUnit)
                 if thisUnit == nil then thisUnit = 'target' end
                 if sourceUnit == nil then sourceUnit = 'player' end
                 return math.abs(getDebuffRemain(thisUnit,v,sourceUnit))
@@ -651,7 +674,9 @@ function br.loader:new(spec,specName)
         end
     end
 
-    if self.talent == nil or self.cast == nil then getSpellsForSpec(spec); getTalentInfo(); getAzeriteTraitInfo(); getFunctions(); br.updatePlayerInfo = false end
+    if spec == GetSpecializationInfo(GetSpecialization()) and (self.talent == nil or self.cast == nil) then 
+        getSpellsForSpec(spec); getTalentInfo(); getAzeriteTraitInfo(); getFunctions(); br.updatePlayerInfo = false 
+    end
 ------------------
 --- OOC UPDATE ---
 ------------------
@@ -666,15 +691,17 @@ function br.loader:new(spec,specName)
 --------------
 
     function self.update()
-        -- Call baseUpdate()
-        if not UnitAffectingCombat("player") then self.updateOOC() end
-        self.baseUpdate()
-        self.getBleeds()
-        -- Update Player Info on Init, Talent, and Level Change
-        if br.updatePlayerInfo then getSpellsForSpec(spec); getTalentInfo(); getAzeriteTraitInfo(); getFunctions(); br.updatePlayerInfo = false end
-        self.getToggleModes()
-        -- Start selected rotation
-        self.startRotation()
+        if spec == GetSpecializationInfo(GetSpecialization()) then 
+            -- Call baseUpdate()
+            if not UnitAffectingCombat("player") then self.updateOOC() end
+            self.baseUpdate()
+            self.getBleeds()
+            -- Update Player Info on Init, Talent, and Level Change
+            if br.updatePlayerInfo then getSpellsForSpec(spec); getTalentInfo(); getAzeriteTraitInfo(); getFunctions(); br.updatePlayerInfo = false end
+            self.getToggleModes()
+            -- Start selected rotation
+            self.startRotation()
+        end
     end
 
 ---------------

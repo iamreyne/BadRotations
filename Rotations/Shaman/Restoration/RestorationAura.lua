@@ -35,6 +35,12 @@ local function createToggles()
         [2] = { mode = "Off", value = 2 , overlay = "DPS Disabled", tip = "DPS Disabled", highlight = 0, icon = br.player.spell.healingSurge }
     };
     CreateButton("DPS",5,0)
+    -- Ghost Wolf Button
+    GhostWolfModes = {
+        [1] = { mode = "Moving", value = 1, overlay = "Moving Enabled", tip = "Will Ghost Wolf when movement detected", highlight = 1, icon = br.player.spell.ghostWolf},
+        [2] = { mode = "Hold", value = 1, overlay = "Hold Enabled", tip = "Will Ghost Wolf when key is held down", highlight = 0, icon = br.player.spell.ghostWolf},
+    };
+    CreateButton("GhostWolf",6,0)
 end
 
 --------------
@@ -62,13 +68,15 @@ local function createOptions()
         -- Pre-Pull Timer
             br.ui:createSpinner(section, "Pre-Pull Timer",  5,  1,  10,  1,  "|cffFFFFFFSet to desired time to start Pre-Pull (DBM Required). Min: 1 / Max: 10 / Interval: 1")
         -- Ghost Wolf
-            br.ui:createCheckbox(section,"Ghost Wolf")
+            br.ui:createDropdownWithout(section, "Ghost Wolf Key",br.dropOptions.Toggle,6,"|cff0070deSet key to hold down for Ghost Wolf")
         -- Water Walking
             br.ui:createCheckbox(section,"Water Walking")
         -- Earth Shield
             br.ui:createCheckbox(section,"Earth Shield")
         -- Temple of Seth
             br.ui:createSpinner(section, "Temple of Seth", 80, 0, 100, 5, "|cffFFFFFFMinimum Average Health to Heal Seth NPC. Default: 80")
+        -- DPS Threshold
+            br.ui:createSpinnerWithout(section, "DPS Threshold", 50, 0, 100, 5, "|cffFFFFFFMinimum Average Health to stop DPS. Default: 50" )
         br.ui:checkSectionState(section)
     -- Cooldown Options
         section = br.ui:createSection(br.ui.window.profile, "Cooldowns")
@@ -106,6 +114,8 @@ local function createOptions()
             end
         -- Astral Shift
             br.ui:createSpinner(section, "Astral Shift",  50,  0,  100,  5,  "|cffFFFFFFHealth Percent to Cast At")
+        -- Cleanse Spirit
+            br.ui:createDropdown(section, "Clease Spirit", {"|cff00FF00Player Only","|cffFFFF00Selected Target","|cffFF0000Mouseover Target"}, 1, "|ccfFFFFFFTarget to Cast On")
         -- Purge
             br.ui:createCheckbox(section,"Purge")
         -- Capacitor Totem
@@ -114,6 +124,8 @@ local function createOptions()
         -- Earthen Wall Totem
             br.ui:createSpinner(section, "Earthen Wall Totem",  95,  0,  100,  5,  "Health Percent to Cast At") 
             br.ui:createSpinnerWithout(section, "Earthen Wall Totem Targets",  1,  0,  40,  1,  "Minimum Earthen Wall Totem Targets")
+            -- Ancestral Spirit
+            br.ui:createDropdown(section, "Ancestral Spirit", {"|cffFFFF00Selected Target","|cffFF0000Mouseover Target"}, 1, "|ccfFFFFFFTarget to Cast On")
         br.ui:checkSectionState(section)
     -- Interrupt Options
         section = br.ui:createSection(br.ui.window.profile, "Interrupts")
@@ -197,6 +209,7 @@ local function runRotation()
         UpdateToggle("DPS",0.25)
         br.player.mode.decurse = br.data.settings[br.selectedSpec].toggles["Decurse"]
         br.player.mode.dps = br.data.settings[br.selectedSpec].toggles["DPS"]
+        br.player.mode.ghostWolf = br.data.settings[br.selectedSpec].toggles["GhostWolf"]
 --------------
 --- Locals ---
 --------------
@@ -239,6 +252,7 @@ local function runRotation()
         enemies.get(8)
         enemies.get(8,"target")
         enemies.get(10)
+        enemies.get(10,"target")
         enemies.get(20)
         enemies.get(30)
         enemies.get(40)
@@ -251,12 +265,13 @@ local function runRotation()
         local function avgHealth()
             avg = 0
             for i=1, #br.friend do
-                totalHealth = totalHealth + br.friend[i].hp
+                if getHP(br.friend[i].unit) < 250 then
+                    totalHealth = totalHealth + br.friend[i].hp
+                end
             end
             avg = totalHealth/#br.friend
             return avg
         end
-
 --------------------
 --- Action Lists ---
 --------------------
@@ -273,16 +288,6 @@ local function runRotation()
                     end
                 end
             end -- End Dummy Test
-        -- Ghost Wolf
-            if isChecked("Ghost Wolf") then
-                if ((#enemies.yards20 == 0 and not inCombat) or (#enemies.yards10 == 0 and inCombat)) and isMoving("player") and not buff.ghostWolf.exists() then
-                    if cast.ghostWolf() then return end
-                end
-            end
-        -- Purge
-            if isChecked("Purge") and canDispel("target",spell.purge) and not isBoss() and GetObjectExists("target") then
-                if cast.purge() then return end
-            end
         -- Water Walking
             if falling > 1.5 and buff.waterWalking.exists() then
                 CancelUnitBuffID("player", spell.waterWalking)
@@ -290,17 +295,13 @@ local function runRotation()
             if isChecked("Water Walking") and not inCombat and IsSwimming() then
                 if cast.waterWalking() then return end
             end
-            -- Temple of Seth
-            if GetObjectID("target") == 133392 and inCombat and isChecked("Temple of Seth") then
-                if getHP("target") < 100 and getBuffRemain("target",274148) == 0 and getValue("Temple of Seth") > avgHealth() then
-                    if not buff.riptide.exists("target") then
-                        if cast.riptide("target") then return true end
-                    end
-                    if getHP("target") < 50 then
-                        if cast.healingSurge("target") then return true end
-                    else
-                        if cast.healingWave("target") then return true end
-                    end
+            -- Ancestral Spirit
+            if isChecked("Ancestral Spirit") then
+                if getOptionValue("Ancestral Spirit")==1 and hastar and playertar and deadtar then
+                    if cast.ancestralSpirit("target","dead") then return true end
+                end
+                if getOptionValue("Ancestral Spirit")==2 and hasMouse and playerMouse and deadMouse then
+                    if cast.ancestralSpirit("mouseover","dead") then return true end
                 end
             end
         end -- End Action List - Extras	
@@ -331,6 +332,26 @@ local function runRotation()
                 if isChecked("Astral Shift") and php <= getOptionValue("Astral Shift") and inCombat then
                     if cast.astralShift() then return end
                 end
+                -- Cleanse Spirit
+                if isChecked("Cleanse Spirit") then
+                    if getOptionValue("Cleanse Spirit")==1 and canDispel("player",spell.cleanseSpirit) then
+                        if cast.cleanseSpirit("player") then return; end
+                    end
+                    if getOptionValue("Cleanse Spirit")==2 and canDispel("target",spell.cleanseSpirit) then
+                        if cast.cleanseSpirit("target") then return true end
+                    end
+                    if getOptionValue("Cleanse Spirit")==3 and canDispel("mouseover",spell.cleanseSpirit) then
+                        if cast.cleanseSpirit("mouseover") then return true end
+                    end
+                end
+                -- Earthen Wall Totem
+                if isChecked("Earthen Wall Totem") and talent.earthenWallTotem then
+                    if castWiseAoEHeal(br.friend,spell.earthenWallTotem,20,getValue("Earthen Wall Totem"),getValue("Earthen Wall Totem Targets"),6,false,true) then return end
+                end
+                -- Purge
+                if isChecked("Purge") and canDispel("target",spell.purge) and not isBoss() and GetObjectExists("target") and avgHealth() > getOptionValue("DPS Threshold") then
+                    if cast.purge() then return end
+                end
             end -- End Defensive Toggle
         end -- End Action List - Defensive
     -- Action List - Interrupts
@@ -351,6 +372,32 @@ local function runRotation()
                 end
             end -- End useInterrupts check
         end -- End Action List - Interrupts
+        local function ghostWolf()
+            -- Ghost Wolf
+            if not (IsMounted() or IsFlying()) then
+               if mode.ghostWolf == 1 then
+                   if ((#enemies.yards20 == 0 and not inCombat) or (#enemies.yards10 == 0 and inCombat)) and isMoving("player") and not buff.ghostWolf.exists() then
+                       if cast.ghostWolf() then end
+                   elseif not isMoving("player") and buff.ghostWolf.exists() and br.timer:useTimer("Delay",0.5) then
+                       RunMacroText("/cancelAura Ghost Wolf")
+                   end
+               elseif mode.ghostWolf == 2 then
+                   if not buff.ghostWolf.exists() then 
+                       if SpecificToggle("Ghost Wolf Key")  and not GetCurrentKeyBoardFocus() then
+                           if cast.ghostWolf() then end
+                       end
+                   elseif buff.ghostWolf.exists() then
+                       if SpecificToggle("Ghost Wolf Key") then
+                           return
+                       else
+                           if br.timer:useTimer("Delay",0.25) then
+                               RunMacroText("/cancelAura Ghost Wolf")
+                           end
+                       end
+                   end
+               end        
+           end
+       end
         -- Action List - Pre-Combat
         function actionList_PreCombat()
         -- Riptide
@@ -437,13 +484,35 @@ local function runRotation()
                 if cast.lavaBurst() then return end
             end
 		-- Chain Lightning
-			if #enemies.yards40 > 2 then 		
+			if #enemies.yards10t >= 2 then 		
             if cast.chainLightning() then return end		
 			end			
         -- Lightning Bolt
             if cast.lightningBolt() then return end
         end -- End Action List - DPS
         local function actionList_AMR()
+            -- Temple of Seth
+            if inCombat and isChecked("Temple of Seth") then
+                for i = 1, GetObjectCount() do
+                    local thisUnit = GetObjectWithIndex(i)
+                    if GetObjectID(thisUnit) == 133392 then
+                        sethObject = thisUnit
+                        if getHP(sethObject) < 100 and getBuffRemain(sethObject,274148) == 0 and avgHealth() >= getValue("Temple of Seth") then
+                            if not buff.riptide.exists(sethObject) then
+                                CastSpellByName(GetSpellInfo(61295),sethObject)
+                        --cast.riptide("target") then return true end
+                            end
+                            if getHP(sethObject) < 50 then
+                                CastSpellByName(GetSpellInfo(8004),sethObject)
+                        --if cast.healingSurge("target") then return true end
+                            else
+                                CastSpellByName(GetSpellInfo(77472),sethObject)
+                        --if cast.healingWave("target") then return true end
+                            end
+                        end
+                    end
+                end
+            end
         -- Ancestral Protection Totem
                 if castWiseAoEHeal(br.friend,spell.ancestralProtectionTotem,20,getValue("Ancestral Protection Totem"),getValue("Ancestral Protection Totem Targets"),10,false,false) then return end
         -- Earthen Wall Totem
@@ -690,27 +759,32 @@ local function runRotation()
 --- Rotations ---
 -----------------
         -- Pause
-        if pause() then
+        ghostWolf()
+        if pause() or mode.rotation == 4 then
             return true
-        else
+        else 
 ---------------------------------
 --- Out Of Combat - Rotations ---
 ---------------------------------
             if not inCombat and not IsMounted() and not drinking then
-                actionList_Extras()
-                if isChecked("OOC Healing") then
-                    actionList_PreCombat()
+                if (buff.ghostWolf.exists() and mode.ghostWolf == 1) or not buff.ghostWolf.exists() then
+                    actionList_Extras()
+                    if isChecked("OOC Healing") then
+                        actionList_PreCombat()
+                    end
                 end
             end -- End Out of Combat Rotation
 -----------------------------
 --- In Combat - Rotations --- 
 -----------------------------
             if inCombat and not IsMounted() and not drinking then
-                actionList_Defensive()
-                actionList_Interrupts()
-                actionList_AMR()
-                if br.player.mode.dps == 1 then
-                    actionList_DPS()
+                if (buff.ghostWolf.exists() and mode.ghostWolf == 1) or not buff.ghostWolf.exists() then
+                    actionList_Defensive()
+                    actionList_Interrupts()
+                    actionList_AMR()
+                    if br.player.mode.dps == 1 and avgHealth() > getOptionValue("DPS Threshold") then
+                        actionList_DPS()
+                    end
                 end
             end -- End In Combat Rotation
         end -- Pause

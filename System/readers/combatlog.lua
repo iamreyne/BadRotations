@@ -80,7 +80,9 @@ function br.read.combatLog()
         local timeStamp, param, hideCaster, source, sourceName, sourceFlags, sourceRaidFlags, destination, destName, destFlags, destRaidFlags, spell, spellName, _, spellType = CombatLogGetCurrentEventInfo()
         br.guid = UnitGUID("player")
         -- Last Cast Success for Spec Abilities Only
-        if param == "SPELL_CAST_SUCCESS" then
+        local castTime = select(4, GetSpellInfo(spell))
+        if castTime == nil then castTime = 0 end
+        if (castTime == 0 and param == "SPELL_CAST_SUCCESS") or (castTime > 0 and param == "SPELL_CAST_START") then
             if sourceName ~= nil then
                 if isInCombat("player") and GetUnitIsUnit(sourceName, "player") then
                     if br.player ~= nil then
@@ -183,7 +185,9 @@ function br.read.combatLog()
             --[[ Cast Failed --> Queue]]
             if param == "SPELL_CAST_FAILED" then
                 if sourceName ~= nil then
-                    if isInCombat("player") and GetUnitIsUnit(sourceName, "player") and spell ~= botSpell and not botCast and spell ~= 48018 and spell ~= 48020 then
+                    if isInCombat("player") and GetUnitIsUnit(sourceName, "player") and not IsPassiveSpell(spell)
+                        and spell ~= botSpell and not botCast and spell ~= 48018 and spell ~= 48020 
+                    then
                         -- set destination
                         if destination == "" then
                             queueDest = nil
@@ -198,8 +202,9 @@ function br.read.combatLog()
                         elseif #br.player.queue ~= 0 then
                             for i = 1, #br.player.queue do
                                 if spell == br.player.queue[i].id then
+                                    tremove(br.player.queue,i)
                                     if not isChecked("Mute Queue") then
-                                        Print("|cFFFF0000" .. spellName .. "|r is already queued.")
+                                        Print("Removed |cFFFF0000" .. spellName .. "|r  from the queue.")
                                     end
                                     break
                                 else
@@ -216,13 +221,13 @@ function br.read.combatLog()
             end
             ------------------
             --[[Queue Casted]]
-            if param == "SPELL_CAST_SUCCESS" then
+            if (castTime == 0 and param == "SPELL_CAST_SUCCESS") or (castTime > 0 and param == "SPELL_CAST_START") or spell == lastCast then
                 if botCast == true then
                     botCast = false
                 end
                 if sourceName ~= nil then
                     if isInCombat("player") and GetUnitIsUnit(sourceName, "player") then
-                        if #br.player.queue ~= 0 then
+                        if br.player ~= nil and br.player.queue ~= nil and #br.player.queue ~= 0 then
                             for i = 1, #br.player.queue do
                                 if spell == br.player.queue[i].id then
                                     tremove(br.player.queue, i)

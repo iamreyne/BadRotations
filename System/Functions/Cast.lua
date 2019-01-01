@@ -546,8 +546,7 @@ function createCastFunction(thisUnit,debug,minUnits,effectRng,spellID,index,pred
 		end
 	end
 	--If we want to predict movement, include casttime, else 0 it
-	if predict ~= nil then castTime = castTime / 1000
-	else castTime = 0 end
+	if predict ~= nil then castTime = castTime / 1000 else castTime = 0 end
     -- local minRange = tonumber(select(5,GetSpellInfo(spellName)))
     -- local maxRange = tonumber(select(6,GetSpellInfo(GetSpellInfo(spellID))))
     -- Nil Catches
@@ -558,7 +557,6 @@ function createCastFunction(thisUnit,debug,minUnits,effectRng,spellID,index,pred
 	if debug == nil then debug = "norm" end
     local function castDebug()
         if isChecked("Cast Debug") and debug ~= "debug" then
-            local unitName = UnitName(thisUnit) or thisUnit
             Print("Casting |cffFFFF00"..spellName.." ("..spellID..") |r on |cffFFFF00"..tostring(UnitName(thisUnit)).."\n |r Spell Type: |cffFFFF00"..spellType..
 				" |r, Cast Type: |cffFFFF00"..tostring(debug).."\n |r Ranges - Min: |cffFFFF00"..minRange.." |r, Max: |cffFFFF00"..maxRange..
 				" |r, Eff: |cffFFFF00"..effectRng.." |r, Min Units: |cffFFFF00"..minUnits)
@@ -566,12 +564,14 @@ function createCastFunction(thisUnit,debug,minUnits,effectRng,spellID,index,pred
 	end
 	local function hasTalent()
 		for k,v in pairs(br.player.spell.talents) do
-			if spellID == v then return br.player.talent[k] end			
+			if spellID == v then return br.player.talent[k] end
 		end
-		return true		
+		return true
 	end
     -- Base Spell Availablility Check
-    if --[[isChecked("Use: "..spellName) and ]]not select(2,IsUsableSpell(spellID)) and getSpellCD(spellID) == 0 and (isKnown(spellID) or debug == "known") then --and hasTalent(spellID) then --and not isIncapacitated(spellID) then
+	if --[[isChecked("Use: "..spellName) and ]]not select(2,IsUsableSpell(spellID)) and getSpellCD(spellID) == 0
+		and (isKnown(spellID) or debug == "known") and hasTalent(spellID) --and not isIncapacitated(spellID)
+	then
         -- Attempt to determine best unit for spell's range
         if thisUnit == nil then
 			if debug == "norm" or debug == "dead" or debug == "rect" or debug == "cone" then
@@ -579,10 +579,10 @@ function createCastFunction(thisUnit,debug,minUnits,effectRng,spellID,index,pred
 			else
 				thisUnit = getSpellUnit(spellCast,true)
 			end
-        end
+		end
         -- Return specified/best cast method
         if debug == "debug" then
-            castDebug()
+			castDebug()
             return true --castSpell(thisUnit,spellCast,false,false,false,false,false,false,false,true)
         elseif thisUnit == "best" then
             castDebug()
@@ -596,7 +596,7 @@ function createCastFunction(thisUnit,debug,minUnits,effectRng,spellID,index,pred
 		elseif thisUnit == "pettarget" and (getDistance("pettarget","pet") < maxRange or IsSpellInRange(spellName,"pettarget") == 1) then
 			castDebug()
 			return castSpell(thisUnit,spellCast,true,false,false,true,false,true,true,false)
-        elseif thisUnit ~= nil then
+		elseif thisUnit ~= nil then
             local distance = getDistance(thisUnit)
             if ((distance >= minRange and distance < maxRange) or IsSpellInRange(spellName,thisUnit) == 1) then
 				local hasEnemies = #getEnemies("player",maxRange) >= minUnits or spellType == "Helpful" or spellType == "Unknown"
@@ -626,7 +626,7 @@ function createCastFunction(thisUnit,debug,minUnits,effectRng,spellID,index,pred
                     castDebug()
                     return castSpell(thisUnit,spellCast,false,false,false,true,true,true,true,false)
                 elseif debug == "norm" and hasEnemies then
-	                castDebug()
+					castDebug()
 	                return castSpell(thisUnit,spellCast,true,false,false,true,false,true,true,false)
 	            end
 	        else
@@ -652,9 +652,12 @@ function castQueue()
 	if br.player ~= nil then
 		if br.player.queue ~= nil and #br.player.queue > 0 and not IsAoEPending() then
 			for i=1, #br.player.queue do
-				local spellID = br.player.queue[i].id
 				local thisUnit = br.player.queue[i].target
-				if createCastFunction(thisUnit,nil,nil,nil,spellID) then return end
+				local debug = br.player.queue[i].debug
+				local minUnits = br.player.queue[i].minUnits 
+				local effectRng = br.player.queue[i].effectRng				
+				local spellID = br.player.queue[i].id
+				if createCastFunction(thisUnit,debug,minUnits,effectRng,spellID) then return end
 			end
 		end
 	end
